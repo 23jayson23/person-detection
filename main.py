@@ -1,53 +1,45 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, UploadFile, File
+from fastapi.middleware.cors import CORSMiddleware
 from ultralytics import YOLO
 import cv2
-from fastapi.responses import StreamingResponse
-from fastapi.middleware.cors import CORSMiddleware
 import numpy as np
 
 app = FastAPI()
-model = YOLO("yolov8n.pt")
 
-# Allow requests from frontend
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Allow all origins for testing
-    allow_credentials=True,
+    allow_origins=["*"],
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# Camera source: 0 = default webcam, or replace with RTSP URL
-camera = cv2.VideoCapture(0)
+model = YOLO("yolov8n.pt")
 
-def generate_frames():
-    while True:
-        success, frame = camera.read()
-        if not success:
-            break
+PERSON_CLASS_ID = 0
 
-        # YOLO detection
-        results = model(frame)
+@app.post("/detect")
+async def detect_person(file: UploadFile = File(...)):
+    image_bytes = await file.read()
+    np_arr = np.frombuffer(image_bytes, np.uint8)
+    frame = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
 
-        for r in results:
-            for b in r.boxes:
-                cls = int(b.cls[0])
-                if model.names[cls] == "person":
-                    x1, y1, x2, y2 = map(int, b.xyxy[0])
-                    conf = float(b.conf[0])
-                    # Draw bounding box + label
-                    cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
-                    cv2.putText(frame, f'Person {conf:.2f}', (x1, y1-10),
-                                cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0,255,0), 2)
+    results = model(frame, conf=0.4)[0]
 
-        # Encode frame as JPEG
-        ret, buffer = cv2.imencode('.jpg', frame)
-        frame_bytes = buffer.tobytes()
+    persons = []
+    for box in results.boxes:
+        cls = int(box.cls[0].item())
+        if cls != PERSON_CLASS_ID:
+            continue  # ❌ ignore non-person
 
-        # Stream the frame
-        yield (b'--frame\r\n'
-               b'Content-Type: image/jpeg\r\n\r\n' + frame_bytes + b'\r\n')
+        x1, y1, x2, y2 = box.xyxy[0].tolist()
+        conf = box.conf[0].item()
 
-@app.get("/video_feed")
-def video_feed():
-    return StreamingResponse(generate_frames(), media_type="multipart/x-mixed-replace; boundary=frame")
+        persons.append({
+            "bbox": [x1, y1, x2, y2],
+            "confidence": conf
+        })
+
+    return {
+        "persons": persons,
+        "count": len(persons)
+    }
