@@ -3,6 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from ultralytics import YOLO
 import cv2
 import numpy as np
+import random  # For demo purposes, mock sensor values
 
 app = FastAPI()
 
@@ -16,6 +17,14 @@ app.add_middleware(
 model = YOLO("yolov8n.pt")
 
 PERSON_CLASS_ID = 0
+
+def get_temperature():
+    # Replace this with actual sensor reading
+    return round(random.uniform(20.0, 30.0), 2)  # °C
+
+def get_water_level():
+    # Replace this with actual sensor reading or calculation
+    return round(random.uniform(0.0, 100.0), 2)  # % full
 
 @app.post("/detect")
 async def detect_person(file: UploadFile = File(...)):
@@ -41,5 +50,7 @@ async def detect_person(file: UploadFile = File(...)):
 
     return {
         "persons": persons,
-        "count": len(persons)
+        "count": len(persons),
+        "temperature": get_temperature(),
+        "water_level": get_water_level()
     }
