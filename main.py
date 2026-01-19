@@ -7,8 +7,11 @@ import random
 import os
 import requests
 
-app = FastAPI()
+app = FastAPI(title="YOLO Person Detection API")
 
+# -----------------------------
+# CORS
+# -----------------------------
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -24,12 +27,15 @@ MODEL_PATH = "yolov8n.pt"
 
 if not os.path.exists(MODEL_PATH):
     print("Downloading YOLO model...")
-    r = requests.get(MODEL_URL, allow_redirects=True)
+    r = requests.get(MODEL_URL, timeout=30)
+    r.raise_for_status()
     with open(MODEL_PATH, "wb") as f:
         f.write(r.content)
     print("Model downloaded!")
 
-# Load the model
+# -----------------------------
+# Load YOLO once (IMPORTANT)
+# -----------------------------
 model = YOLO(MODEL_PATH)
 PERSON_CLASS_ID = 0
 
@@ -43,6 +49,13 @@ def get_water_level():
     return round(random.uniform(0.0, 100.0), 2)
 
 # -----------------------------
+# Health check
+# -----------------------------
+@app.get("/")
+def health():
+    return {"status": "ok"}
+
+# -----------------------------
 # Person detection endpoint
 # -----------------------------
 @app.post("/detect")
@@ -51,20 +64,22 @@ async def detect_person(file: UploadFile = File(...)):
     np_arr = np.frombuffer(image_bytes, np.uint8)
     frame = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
 
+    if frame is None:
+        return {"error": "Invalid image"}
+
     results = model(frame, conf=0.4)[0]
 
     persons = []
     for box in results.boxes:
-        cls = int(box.cls[0].item())
-        if cls != PERSON_CLASS_ID:
-            continue  # ignore non-person
+        if int(box.cls[0]) != PERSON_CLASS_ID:
+            continue
 
         x1, y1, x2, y2 = box.xyxy[0].tolist()
-        conf = box.conf[0].item()
+        confidence = float(box.conf[0])
 
         persons.append({
             "bbox": [x1, y1, x2, y2],
-            "confidence": conf
+            "confidence": confidence
         })
 
     return {
