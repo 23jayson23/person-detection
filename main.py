@@ -3,7 +3,9 @@ from fastapi.middleware.cors import CORSMiddleware
 from ultralytics import YOLO
 import cv2
 import numpy as np
-import random  # For demo purposes, mock sensor values
+import random
+import os
+import requests
 
 app = FastAPI()
 
@@ -14,18 +16,35 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-model = YOLO("yolov8n.pt")
+# -----------------------------
+# Download YOLO model dynamically
+# -----------------------------
+MODEL_URL = "https://github.com/ultralytics/assets/releases/download/v0.0.0/yolov8n.pt"
+MODEL_PATH = "yolov8n.pt"
 
+if not os.path.exists(MODEL_PATH):
+    print("Downloading YOLO model...")
+    r = requests.get(MODEL_URL, allow_redirects=True)
+    with open(MODEL_PATH, "wb") as f:
+        f.write(r.content)
+    print("Model downloaded!")
+
+# Load the model
+model = YOLO(MODEL_PATH)
 PERSON_CLASS_ID = 0
 
+# -----------------------------
+# Mock sensor functions
+# -----------------------------
 def get_temperature():
-    # Replace this with actual sensor reading
-    return round(random.uniform(20.0, 30.0), 2)  # °C
+    return round(random.uniform(20.0, 30.0), 2)
 
 def get_water_level():
-    # Replace this with actual sensor reading or calculation
-    return round(random.uniform(0.0, 100.0), 2)  # % full
+    return round(random.uniform(0.0, 100.0), 2)
 
+# -----------------------------
+# Person detection endpoint
+# -----------------------------
 @app.post("/detect")
 async def detect_person(file: UploadFile = File(...)):
     image_bytes = await file.read()
@@ -38,7 +57,7 @@ async def detect_person(file: UploadFile = File(...)):
     for box in results.boxes:
         cls = int(box.cls[0].item())
         if cls != PERSON_CLASS_ID:
-            continue  # ❌ ignore non-person
+            continue  # ignore non-person
 
         x1, y1, x2, y2 = box.xyxy[0].tolist()
         conf = box.conf[0].item()
