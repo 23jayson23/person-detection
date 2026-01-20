@@ -7,7 +7,7 @@ import random
 import os
 import requests
 
-app = FastAPI(title="YOLO Chicken Detection API")
+app = FastAPI(title="YOLO Chick Detection API")
 
 # -----------------------------
 # CORS
@@ -34,7 +34,7 @@ if not os.path.exists(MODEL_PATH):
     print("Model downloaded!")
 
 # -----------------------------
-# Load YOLO once (IMPORTANT)
+# Load YOLO once
 # -----------------------------
 model = YOLO(MODEL_PATH)
 CHICKEN_CLASS_ID = 14  # COCO class ID for chicken
@@ -56,10 +56,10 @@ def health():
     return {"status": "ok"}
 
 # -----------------------------
-# Chicken detection endpoint
+# Chick detection endpoint
 # -----------------------------
 @app.post("/detect")
-async def detect_chicken(file: UploadFile = File(...)):
+async def detect_chick(file: UploadFile = File(...)):
     image_bytes = await file.read()
     np_arr = np.frombuffer(image_bytes, np.uint8)
     frame = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
@@ -69,22 +69,26 @@ async def detect_chicken(file: UploadFile = File(...)):
 
     results = model(frame, conf=0.4)[0]
 
-    chickens = []
+    chicks = []
     for box in results.boxes:
         if int(box.cls[0]) != CHICKEN_CLASS_ID:
             continue
 
         x1, y1, x2, y2 = box.xyxy[0].tolist()
-        confidence = float(box.conf[0])
+        width = x2 - x1
+        height = y2 - y1
 
-        chickens.append({
-            "bbox": [x1, y1, x2, y2],
-            "confidence": confidence
-        })
+        # Filter by size: consider only small chickens as chicks
+        if width < 50 and height < 50:  # Adjust these thresholds as needed
+            confidence = float(box.conf[0])
+            chicks.append({
+                "bbox": [x1, y1, x2, y2],
+                "confidence": confidence
+            })
 
     return {
-        "chickens": chickens,
-        "count": len(chickens),
+        "chicks": chicks,
+        "count": len(chicks),
         "temperature": get_temperature(),
         "water_level": get_water_level()
     }
