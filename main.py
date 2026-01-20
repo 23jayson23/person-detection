@@ -7,7 +7,7 @@ import random
 import os
 import requests
 
-app = FastAPI(title="YOLO Person Detection API")
+app = FastAPI(title="YOLO Chicken Detection API")
 
 # -----------------------------
 # CORS
@@ -37,7 +37,7 @@ if not os.path.exists(MODEL_PATH):
 # Load YOLO once (IMPORTANT)
 # -----------------------------
 model = YOLO(MODEL_PATH)
-PERSON_CLASS_ID = 0
+CHICKEN_CLASS_ID = 14  # COCO class ID for chicken
 
 # -----------------------------
 # Mock sensor functions
@@ -56,10 +56,10 @@ def health():
     return {"status": "ok"}
 
 # -----------------------------
-# Person detection endpoint
+# Chicken detection endpoint
 # -----------------------------
 @app.post("/detect")
-async def detect_person(file: UploadFile = File(...)):
+async def detect_chicken(file: UploadFile = File(...)):
     image_bytes = await file.read()
     np_arr = np.frombuffer(image_bytes, np.uint8)
     frame = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
@@ -69,22 +69,22 @@ async def detect_person(file: UploadFile = File(...)):
 
     results = model(frame, conf=0.4)[0]
 
-    persons = []
+    chickens = []
     for box in results.boxes:
-        if int(box.cls[0]) != PERSON_CLASS_ID:
+        if int(box.cls[0]) != CHICKEN_CLASS_ID:
             continue
 
         x1, y1, x2, y2 = box.xyxy[0].tolist()
         confidence = float(box.conf[0])
 
-        persons.append({
+        chickens.append({
             "bbox": [x1, y1, x2, y2],
             "confidence": confidence
         })
 
     return {
-        "persons": persons,
-        "count": len(persons),
+        "chickens": chickens,
+        "count": len(chickens),
         "temperature": get_temperature(),
         "water_level": get_water_level()
     }
